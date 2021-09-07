@@ -1,0 +1,430 @@
+---
+title: "Simdata for SMLP2021"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+The goal of this data simulation is to simulate a dataset for an XAB phoneme discrimination task with a binomial response variable. There are two groups (each: n = 40), one control group and one with a history of hearing loss due to Otitis Media with Effusion (OME group). There are 50 trials with two main conditions (voicing contrast and place of articulation contrast) and a filler contrast, which is included for tests against chance level but excluded from filler analyses. 
+
+I am happy for any feedback on how the code can be simplified. In addition, since we need to provide power simulations for the journal that we are submitting to and I would love to get suggestions for how to start those. 
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#load packages:
+library(lme4)
+library(readxl)
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(viridis) 
+library(lme4)
+library(simstudy)
+library(MASS)
+library(interactions)
+
+#clear environment
+rm(list = ls())
+
+
+```
+
+1: Creation of a Latin-square design with 50 items & 80 subjects and the condition variable contrast_all (10 filler trials, 20 PoA trials & 20 voicing trials)
+
+```{r}
+#create experiment with 40 items (only critical items) and 80 subjects,and two groups  
+set.seed(1)
+
+nitem <-50
+nsubj <-80
+
+g1 <-data.frame(item = 1:nitem, contrast_all = c(rep("filler", nitem*0.2), 
+                                                      rep(c("PoA","voicing"), each = nitem*0.4)))
+g2 <-data.frame(item = 1:nitem, contrast_all = c(rep("filler", nitem*0.2), 
+                                                      rep(c("PoA","voicing"), each = nitem*0.4)))
+
+##assemble data frame 
+gp1 <- g1[rep(seq_len(nrow(g1)), nsubj/2), ]
+gp2 <- g2[rep(seq_len(nrow(g2)), nsubj/2), ]
+
+simdat <- rbind(gp1,gp2)
+
+##contrast coding contrast_features variable 
+simdat$contrast_all <- factor(simdat$contrast_all, levels = c("PoA", "voicing", "filler"))
+contrasts(simdat$contrast_all) <- contr.helmert
+contrasts(simdat$contrast_all)
+
+##add subject column 
+simdat$subj <- rep(1:nsubj, each = nitem)
+
+##add a column for randomization 
+simdat$rand <- runif(4000, min = 0, max = 40)
+
+str(simdat)
+
+```
+3: Create Variable "group" (OME vs. controls) and code a sum contrast with -0.5 for OME and +0.5 for controls 
+```{r}
+##add column where the first 40 subjects are in the OME group 
+##and the other 40 subjects are controls 
+simdat <- simdat %>% mutate(group =
+                     case_when(simdat$subj <= 40 ~ "OME", 
+                                   simdat$subj > 40 ~ "control")
+)
+
+##change variable group to a factor 
+simdat$group <- factor(simdat$group, levels = c("OME", "control"))
+
+##contrast coding group factor 
+contrasts(simdat$group) <- c(-0.5,0.5)
+contrasts(simdat$group) 
+```
+
+2: Create Variables: Xstim (indicating whether the X stimulus was a velar/alveolar for PoA trials and voiced/voiceless for voicing trials) 
+and Xstim2 (whether the trial was a voiced or voiceless PoA trial or a velar/alveolar voicing trial). 
+Since Filler trials are excluded from these analyses, these are simply represented as fillers
+```{r}
+##Xstim: 50% of the PoA trials (n=10) start with a velar and the other half with an alveolar X stimulus, 
+##50% of voicing trial start with a voiced X stimulus and the other 50% with a voiceless X stimulus
+simdat$Xstim = c(rep("filler", nitem*0.2), 
+                 rep(c("PoA_vel","PoA_alv","voicing_voiced","voicing_voiceless"), each = nitem*0.2))
+
+##Xstim2: 50% of trials with a velar X stimulus (n=5) are voiced and 50% are voiceless, 
+##same for 50% of the trials with an alveolar X stimulus
+##50% of the voicing trials with a voiced X stimulus (n=5) are alveolar, 50% are velar, 
+##same for 50% of the trials with a voiceless X stimulus 
+simdat$Xstim2 = c(rep("filler", nitem*0.2), 
+                  rep(c("PoA_voiced","PoA_voiceless","PoA_voiced","PoA_voiceless"), each = nitem*0.1), 
+                  rep(c("voicing_alv","voicing_vel","voicing_alv","voicing_vel"), each = nitem*0.1))
+```
+
+3: Create Variable: Age (between 36 (3;0 years) and 71 (5;11 years) months)
+```{r}
+##variable months (between 36 months and 71 months) for all 80 subjects
+simdat$months <- rep(sample(36:71,80, replace = T), each = 50)
+
+##create centered variable for model 
+simdat$monthscentered <- scale(simdat$months, center = TRUE, scale = TRUE)
+
+
+```
+
+
+4: Create a randomized running order per subject 
+```{r}
+##reorder running order to be different per subject
+simdat <- simdat[order(simdat[,3], simdat[,4]),
+]
+
+##add order column 
+simdat$trialnr <- rep(1:50, nsubj)
+
+
+##reorder columns and drop the randomization column 
+simdat <- simdat[,c("subj","months","monthscentered","group","trialnr", "item", "contrast_all","Xstim","Xstim2" )]
+```
+
+
+5: Contrast Coding: Contrast_features as a Helmert Contrast 
+```{r}
+#contrast contrast_features (helmert contrast)
+simdat$contrast_all <- factor(simdat$contrast_all, levels = c("PoA", "voicing", "filler"))
+contrasts(simdat$contrast_all) <- contr.sum
+contrasts(simdat$contrast_all)
+```
+
+
+6: Create an intercept, as well as adjustments made to that intercept by the fixed factors group and contrast_features
+```{r}
+#creation of intercept (average accuracy baseline, regardless of group)
+simdat$accuracy_intercept <- c(0.7)
+
+##adjustment by group
+simdat <- simdat %>% mutate(offset_group =
+                     case_when( simdat$group == "OME" ~ -0.125, 
+                                simdat$group == "control" ~ +0.125 ))
+
+##adjustment by feature 
+simdat <- simdat %>% mutate(offset_contrast =
+                     case_when( simdat$contrast_all == "PoA" ~ + 0.04, 
+                                simdat$contrast_all == "voicing" ~ -0.04,
+                                simdat$contrast_all == "filler" ~ +0.085))
+
+##adjustment by centered age
+simdat <- simdat %>% mutate(offset_age = simdat$monthscentered*0.02)
+              
+```
+
+
+7: Generate random effects for subjects and items (drawn from a normal distribution)
+```{r}
+##generate random effects for subject (one random adjustment between -0.04 and 0.04 per subject)
+simdat$offset_subj <- rep(runif(80,min = -0.04, max=0.04), each = 50)
+
+##generate random effects for item (one random adjustment between -0.04 and 0.04 per item)
+simdat$offset_item <- rep(runif(50,min = -0.03, max = 0.03), 80)
+
+colnames(simdat)
+```
+
+8: Create DV Accuracy based on the intercept and adjustments to the intercept (column 10) based on the fixed and random factors (columns 11:15)
+```{r}
+##create probability based on all adjustments   
+simdat$accuracy_prob <- rowSums(simdat[ , c(10:15)], na.rm=TRUE)
+
+##generate accuracy column
+simdat$accuracy <- rbinom(4000,1,prob = simdat$accuracy_prob)
+```
+
+
+9: Check Descriptives 
+```{r}
+
+accuracy_groupcond<- aggregate(accuracy ~ group + contrast_all, mean, 
+                               na.rm = TRUE, data = simdat)
+accuracy_groupcond
+
+accuracy_pergroup<- aggregate(accuracy ~ group, mean, na.rm = TRUE, data = simdat)
+accuracy_pergroup
+
+
+```
+
+10: Get summary of data frame to check coding: 
+```{r}
+str(simdat)
+```
+
+11: Model 1 (Chance Comparison)
+
+```{r}
+M1 = glmer(accuracy ~ -1 + group : contrast_all + (1 | subj) + (1 | item), 
+           data = simdat, family = "binomial", 
+           control = glmerControl (optimizer = "bobyqa"))
+
+summary(M1)
+```
+M1 output should show significant above-chance performance in all conditions, an exception could be voicing trials in the OME group (which could be at chance level)
+
+12: Change Dataset to exclude filler trials, get a new trial number column and order the dataset
+
+```{r}
+##exclude fillers
+simdat <- subset(simdat, simdat$contrast_all !="filler")
+
+##set new number of items 
+nitem <-40
+simdat$trialnr <- rep(1:40, nsubj)
+
+```
+
+13: Rename variable contrast_all to contrast_crit; re-code contrast 
+```{r}
+#renaming contrast_features to contrast_crit
+colnames(simdat)[7] <- "contrast_crit"
+
+#contrast coding contrast_crit (sum contrast)
+simdat$contrast_crit <- factor(simdat$contrast, levels = c("voicing", "PoA"))
+(contrasts(simdat$contrast_crit) <- c(-0.5,+0.5))
+contrasts(simdat$contrast_crit)
+
+```
+
+
+14: Create Variable "contrast_direction" (to be nested within contrast_crit) to test for directionality effects (whether there is a difference in accuracy depending on the X stimulus in the XAB trials). An example of this would be that accuracy is higher in PoA trials starting with an alveolar (t/d) stimulus compared to PoA trials starting with a velar stimulus. 
+
+```{r}
+#add variable contrast_direction to dataset 
+simdat <- simdat %>% mutate(contrast_direction =
+                     case_when( simdat$Xstim == "PoA_vel" ~ "ab1", 
+                                simdat$Xstim == "PoA_alv" ~ "ab2",
+                                simdat$Xstim == "voicing_voiced" ~ "ab1",  
+                                simdat$Xstim == "voicing_voiceless" ~ "ab2")) 
+
+##make contrast_direction  a factor 
+##(ab1 = PoA_velar and voicing_voiced ; ab2 = PoA_alv and voicing_voiceless)
+simdat$contrast_direction <- factor(simdat$contrast_direction, levels = c("ab1", "ab2"))
+
+##contrast coding contrast_direction (where PoA_velar and voicing_voiced are 
+##coded as -0.5 and PoA_alv and PoA_alv and voicing_voiceless are coded as -0.5)
+contrasts(simdat$contrast_direction) <- c(-0.5,0.5)
+contrasts(simdat$contrast_direction)
+```
+
+15: Create Variable "contrast_type" (to be nested within contrast_crit) to test for perceptual asymmetries (whether there is a difference in accuracy depending on the type of trial). An example of this would be that accuracy is higher in alveolar PoA trials compared to velar PoA trials. 
+
+```{r}
+#add variable contrast_type to dataset 
+simdat <- simdat %>% mutate(contrast_type =
+                     case_when( simdat$Xstim2 == "PoA_voiceless" ~ "ab1", 
+                                simdat$Xstim2 == "PoA_voiced" ~ "ab2",
+                                simdat$Xstim2 == "voicing_vel" ~ "ab1",  
+                                simdat$Xstim2 == "voicing_alv" ~ "ab2")) 
+
+##make contrast_type  a factor 
+##(ab1 = PoA_voiceless and voicing_velar ; ab2 = PoA_voiced and voicing_alv)
+simdat$contrast_type <- factor(simdat$contrast_type, levels = c("ab1", "ab2"))
+
+##contrast coding contrast_type (where PoA_velar and voicing_voiced are 
+##coded as -0.5 and PoA_alv and PoA_alv and voicing_voiceless are coded as -0.5)
+contrasts(simdat$contrast_type) <- c(-0.5,0.5)
+contrasts(simdat$contrast_type)
+```
+
+
+16: Create adjustments to the intercept based on the contrast_direction and contrast_type contrasts (set to 0 for simulation purposes), as well as an interaction effect between contrast_crit and group 
+- Current adjustments for group are -0.125 for OME group and +0.125 for controls  
+- Current adjustments for feature are -0.04 for voicing trials and +0.04 for PoA trials
+```{r}
+
+##adjustment by contrast_direction: 
+##set to 0 for the current simulation as we do not expect any significant effects
+simdat <- simdat %>% mutate(offset_trialdirection =
+                     case_when( simdat$Xstim == "PoA_vel" ~ 0, 
+                                simdat$Xstim == "PoA_alv" ~ +0,
+                                simdat$Xstim == "voicing_voiced" ~ 0,  
+                                simdat$Xstim == "voicing_voiceless" ~ 0)) 
+
+##adjustment by contrast_type: 
+##set to 0 for the current simulation as we do not expect any significant effects
+simdat <- simdat %>% mutate(offset_trialtype =
+                     case_when( simdat$Xstim2 == "PoA_voiced" ~ 0, 
+                                simdat$Xstim2 == "PoA_voiceless" ~ +0,
+                                simdat$Xstim2 == "voicing_alv" ~ 0,  
+                                simdat$Xstim2 == "voicing_vel" ~ 0)) 
+
+##adjustment interaction group*contrast_crit (bigger effect of contrast_feature 
+##in OME group compared to controls)
+simdat <- simdat %>% mutate(offset_gfinter =
+                     case_when( simdat$group == "OME" & simdat$contrast_crit == "PoA"~ + 0.08, 
+                                simdat$group == "OME" & simdat$contrast_crit == "voicing"~ -0.08, 
+                                simdat$group == "control" & simdat$contrast_crit == "PoA"~ -0.06,  
+                                simdat$group == "control" & simdat$contrast_crit == "voicing"~ 0.06)) 
+
+
+colnames(simdat)
+
+```
+
+
+17: Create DV Accuracy based on the intercept and adjustments to the intercept (column 10) based on the fixed and random factors (columns 11:15,20:22)
+```{r}
+##create probability based on all adjustments   
+simdat$accuracy_prob <- rowSums(simdat[ , c(10:15,20:22)], na.rm=TRUE)
+
+##generate accuracy column
+simdat$accuracy <- rbinom(3200,1,prob = simdat$accuracy_prob)
+str(simdat)
+colnames(simdat)
+```
+
+18: Check Descriptives 
+```{r}
+
+accuracy_pergroup<- aggregate(accuracy ~ group, mean, na.rm = TRUE, data = simdat)
+accuracy_pergroup
+
+accuracy_groupcond<- aggregate(accuracy ~ contrast_crit + group, mean, na.rm = TRUE, data = simdat)
+accuracy_groupcond
+
+
+
+
+```
+
+
+```{r}
+# check that offsets align with outcomes
+
+#simdat$accuracy_probNoRandom <- rowSums(simdat[ , c(10:15,20:22)], na.rm=TRUE)
+
+#aggregate(accuracy_probNoRandom ~ 1, mean, na.rm = TRUE, data = simdat) # should be equal to intercept
+
+#aggregate(accuracy_probNoRandom ~ group, mean, na.rm = TRUE, data = simdat)
+
+#aggregate(accuracy_probNoRandom ~ group, mean, na.rm = TRUE, 
+         # data = simdat) - unlist(aggregate(accuracy_probNoRandom ~ 1, mean, 
+                                           # na.rm = TRUE, data = simdat)) #should be equal to group offsets
+
+```
+
+
+19: Model 2a (Test for Directionality effects: whether there is a difference in accuracy between PoA trials with a velar X stimulus and those with an alveolar X stimulus or between voicing trials with a voiced X stimulus compared to a voiceless X stimulus)
+
+
+```{r}
+#contrast_direction model
+M2a <- glmer(accuracy ~ 1 + group/contrast_crit/contrast_direction + (1 | subj) + (1 | item), 
+            data = simdat, family = "binomial", 
+            control = glmerControl (optimizer = "bobyqa"))
+
+summary(M2a)
+```
+M2a output should show that in both groups, discrimination accuracy does not differ depending on the direction of change from X to A and B stimuli (from velar to alveolar vs. from alveolar to velar in PoA trials // from voiced to voiceless vs. from voiceless to voiced in voicing trials) 
+
+20: Model 2b (Test for perceptual asymmetries within the conditions: difference in accuracy between voiced and voiceless PoA trials or between velar and alveolar voicing trials)
+```{r}
+#contrast_type model
+M2b <- glmer(accuracy ~ 1 + group/contrast_crit/contrast_type + (1 | subj) + (1 | item), 
+            data = simdat, family = "binomial", 
+            control = glmerControl (optimizer = "bobyqa"))
+
+summary(M2b)
+```
+M2b output should show that accuracy does not differ significantly between the two types of voicing trials (velar and alveolar) and both types of PoA trials (voiced & voiceless) 
+
+21: Model 3: Group Comparison, Age in months as a covariate 
+```{r}
+#group comparison model
+M3 <- glmer(accuracy ~ monthscentered + group*contrast_crit  + (1 | subj) + (1 | item), data = simdat, 
+           family = "binomial", control = glmerControl (optimizer = "bobyqa"))
+
+summary(M3)
+
+```
+M3 output should show an age effect, a significant effect of group and feature as well as a negative interaction coefficient for group and feature 
+
+22: Plot 1 (Accuracy per group and condition)
+```{r}
+ggplot(simdat) + aes(x = contrast_crit, y = accuracy_prob*100) + geom_violin(aes(fill = contrast_crit))  + 
+  geom_boxplot(width = 0.6, color = "grey", alpha = 0.4, outlier.colour = "red", outlier.shape = 4) + 
+  geom_line(aes(group = subj), size = 0.06, color = "grey") + facet_wrap(~group) + 
+  geom_hline(yintercept=50, color = "000033", linetype ="dashed") + xlab("Contrast") + 
+  ylab ("Discrimination Accuracy (% correct)") + scale_fill_manual(name = "Contrast", 
+                    labels = c("Voicing", 
+                               "Place of Articulation" 
+                    ),
+                    values = c( "cornflowerblue",
+                               "darkgoldenrod2"
+                    )) + ggtitle("Discrimination Accuracy per Group", 
+                                 subtitle = "Voicing vs. Place of Articulation Contrast") +  
+  theme(plot.title = element_text(colour = "000033", face = "bold",
+                                  size = rel(2),family = "Helvetica")) + theme(
+                                    legend.justification = c("right", "top"),
+                                    legend.box.just = "right",
+                                    legend.margin = margin(1, 1, 1, 1), 
+                                    legend.title = element_text(colour="000033", size=10, 
+                                    ), 
+                                    legend.text = element_text(colour = "000033", size=10)
+                                  )
+
+
+
+```
+
+
+
+
+23: Plot2 (Visualization of M3, interaction between group and contrast)
+```{r}
+cat_plot(M3, pred = group, modx = contrast_crit, geom = "line", point.shape = TRUE, vary.lty = TRUE,
+         colors = c("black","darkgray"), x.label = "Group", point.size = 0.5, errorbar.width = 0.1,
+         y.label = "Discrimination Accuracy", main.title = "GLMM: Group*Contrast Interaction", legend.main = "Contrast")
+```
+
+
+
