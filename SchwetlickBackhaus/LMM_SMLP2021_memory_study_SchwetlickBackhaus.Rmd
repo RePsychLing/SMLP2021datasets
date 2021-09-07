@@ -1,0 +1,185 @@
+---
+title: "LMM Analysis Fixation Duration"
+author: "Schwetlick Lisa, Backhaus Daniel"
+date: "July 2021"
+last change: "minor rmd style"
+output:
+  slidy_presentation:
+  css: font.css
+beamer_presentation: default
+ioslides_presentation: default
+header-includes: \usepackage{amsmath}
+editor_options:
+chunk_output_type: console
+---
+  
+  
+```{r setup, include=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+rm(list=ls())
+#setwd("/Users/Daniel/CloudStation/Arbeit/03_Allgemeine Psychologie/2020/Lisa_Memory/SUBSET_SMLP/")
+
+set.seed(123)
+
+library(MASS)
+library(lme4)
+library(tidyverse)
+
+ginv2 <- function(x) # define a function to make the output nicer
+  MASS::fractions(provideDimnames(MASS::ginv(x),base=dimnames(x)[2:1]))
+
+theme_set(theme_bw(base_size=18))
+```
+
+# Load data
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+Filename<-"smlp_mem_data.RData"
+load(Filename)#d
+```
+
+# Visualization of fixation duration
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE}
+fd<-d%>%
+  group_by(Experiment, FPT, imtype, Subject, FSP)%>%
+  summarise(mfd=mean(fixdur, na.rm=T), N=n())%>%
+  group_by(Experiment, Subject)%>%
+  mutate(mSubject=mean(mfd, na.rm = T))%>%
+  mutate(M=nrow(unique(data.frame(Experiment,FPT,imtype,FSP))) )%>%
+  ungroup(.)%>%
+  mutate(mall = mean(mfd, na.rm=T))%>%
+  mutate(mcos=mfd-mSubject+mall)%>%
+  group_by(Experiment, imtype, FPT, FSP)%>%
+  summarise(m=mean(mfd, na.rm=T),
+            N=n(),
+            sd=(sd(mcos, na.rm=T)*sqrt((unique(M)/(unique(M)-1)))), # von daniel
+            se=sd/sqrt(N-1)) %>% 
+  mutate(tog= paste(Experiment,FSP))
+```
+
+
+```{r, fig.width=14, fig.height=5}
+(fd_plot<- ggplot(data=fd, aes(x=factor(FPT), y=m, color=Experiment, group=tog, linetype=FSP))+
+  facet_grid( ~ imtype, scales = "free_x")+
+  geom_line(size=1.5)+
+  geom_point(size=3, aes(shape=Experiment))+
+  geom_errorbar(aes(ymin=m-qt(.975,N-1)*se, ymax=m+qt(.975,N-1)*se), width=.2, size=.75)+ # confidence intervals
+  ggtitle("Fixation Duration")+
+  xlab("Nth Viewingn (FPT)")+
+  ylab("Mean Fixation Duration [ms]")+
+  labs(linetype = "Similar Possible (FSP)", color="Experiment"))
+```
+
+# Research question
+
+This experiment looks at eye movement characteristics and the effect of seeing the same image twice.
+We call this "presentation type" (first vs. second viewing)
+Additionally we manipulated whether the subjects think  there is a possibility similar images being shown.
+We call this factor "similar possible".
+In the data we will look at do not actually contain any similar images. The manipulation only refers to the
+instruction and previous or later tasks.
+
+ 
+columns:
+
+* Experiment = we conducted three separate experiments with different subjects. We used same images in all three experiments.The only difference is in the factor similar possible(FSP).
+* fixdur = fixation duration our dependent variable
+* Img = image number
+* trial = trial number
+* Subject = subject number
+* nthpres = ordinal presentation number of an image: "1", "2"
+* imtype = imagetype, is an image: "new", "identical to a former new image" or "similar to a former new image" - this last type we exclude for this analysis
+* FPT = factor presentation type: "new", "identical" 
+* FSP = factor similar possible: did the subjects think that similar images could appear? "FALSE" "TRUE
+
+Note: the factor similar possible (FSP) is a between subject factor for experiment 3 and 4 
+      BUT a within-subject factor in experiment 5
+
+
+# Select relevant data and setup dependent variable
+
+```{r}
+d<-d  %>% 
+  filter(imtype != "similar") %>%  #not of interest for this analysis
+  select(-c(imtype)) %>% 
+  mutate(FPT = factor(FPT)) %>% 
+  mutate(DV=fixdur, DV_org=DV, DV_log=log(DV), DV_reci=1/DV) 
+
+# have a look
+str(d)
+```
+
+
+# Create custom contrasts
+
+```{r}
+# Create custom contrasts FPT (factor presentation type)
+t(Xicost <- fractions(rbind(Hyp1=c(X1= -1 ,  X2= 1))))
+
+(Xcost <- ginv2(Xicost))
+colnames(Xcost) <- c("FNewIdentical")
+contrasts(d$FPT) <- Xcost
+
+
+# Create custom contrasts FSP (factor similar possible)
+t(Xicost <- fractions(rbind(Hyp1=c(X1= -1 ,  X2= +1))))   # could be changed to treatment if this is of interest
+
+
+(Xcost <- ginv2(Xicost))
+colnames(Xcost) <- c("FSimilarPossible")
+contrasts(d$FSP) <- Xcost
+
+mat_myC <- model.matrix(~ FPT + FSP, d)
+```
+
+## Check collinearity
+
+```{r}
+#find perfectly multicollinear variables
+constant<-rep(1,nrow(mat_myC))
+tmp<-lm(constant ~ ., data=as.data.frame(mat_myC))
+(collinear<-tmp$coefficients[is.na(tmp$coefficients)]) # ignore the intercept here
+# no columns are collinear
+
+
+# add modelmatrix to dataframe
+ncol(mat_myC)
+start<-ncol(d)+1
+end<-ncol(d)+ncol(mat_myC)
+d[,start:end]<-mat_myC
+
+names(d)[start:end] <- c("Intercept","FNewIdentical","FSimilarPossible" )
+```
+
+## Have a look
+
+```{r}
+head(d)
+summary(d)
+glimpse(d)
+```
+
+
+# Fit minimal model
+
+```{r}
+lmm.min <- lmer(DV ~ 1+ FPT + FSP  + (1| Subject) + (1| Img), data=d, REML=FALSE)
+
+summary(rePCA(lmm.min))
+summary(lmm.min)
+```
+
+
+# Question
+
+We have three experiments. In experiment 3 similar images were possible. In experiment 4 similar images were not possible.
+In experiment 5 we used "similar possible" as a within-subject variable in subsequent blocks. 
+So we have the same factor in all three experiments, but it is a within-subject factor only for experiment 5 and a between subject factor for 3 and 4.
+
+How can we implement this in our varying effect (random) part of the model formula?
+
+```{r}
+lmm.1 <- lmer(DV ~ 1+ FPT + FSP  + (1+ FPT + FSP| Subject) + (1+ FPT + FSP| Img), data=d, REML=FALSE)
+```

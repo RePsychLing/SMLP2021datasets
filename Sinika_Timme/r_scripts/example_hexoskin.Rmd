@@ -1,0 +1,189 @@
+---
+title: "Example Summer School"
+author: "Sinika Timme"
+date: "8/20/2021"
+output: 
+  html_document:
+    toc: true # table of content true
+    toc_depth: 5  # upto three depths of headings (specified by #, ## and ###)
+    number_sections: yes  ## if you want number sections at each table header
+    theme: united  # many options for theme, this one is my favorite.
+    highlight: tango  # specifies the syntax highlighting style
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(lme4)
+library(sjstats)
+library(sjPlot)
+
+```
+
+# Description 
+
+Project Hexo Skin
+
+The HexoSkin project examines physiological and psychological variables during PE lessons. With the help of smart shirts (HexoSkin) physiological parameters (e.g. breathing_rate; minute_ventilation, acceleration, HR, cadence) were collected during PE lessons. Every ten minutes pupils were asked how they currently feel (affect).
+
+Current data sata
+
+Measurements have been carried out in three schools with a total of 31 subjects so far.  12 participants from Zurich, 11 from Nauen and 8 from Potsdam. Each session has 8 time points of affect, while the physiological parameters were recorded every second. In Zurich, the 11 subjects took part at 4 different sessions. In total there were 6 sessions (see Fig. 1).
+
+![Abb. 1](../r_scripts/organigram 2.png){width=75%}
+
+# This script
+
+* Graphs of the Affect data 
+
+
+```{r, include=FALSE}
+hexaff_all <- read.csv2("../data/hexaff_all.csv", sep=";", comment.char="#")
+
+hexaff_all %>% group_by(ID, date) %>% summarize(N = n()) #%>% group_by(ID) %>% summarize(N = n()) 
+#Subject 1 11.05. is missing
+#Subject 2 20.04. no hexoskin data
+#Subject 8 13.04. no hexoskin data
+# Subject 10 20.04. no hexoskin data
+#Subject 12: the same or different children? (20.04. and 11.05.)
+# Subject 26: no hexoskin
+```
+
+# Psychological responses 
+## Affect
+
+```{r, include = F}
+affect <- hexaff_all %>% group_by(ID, timepoint, date, school_ID) %>% summarize(N = n(), FS = mean(FS))
+
+sum(is.na(affect$FS))
+
+affect %>% group_by(ID) %>% summarize (N = n())
+
+summary(affect)
+#We have 510 affect observations, from which 102 are NAs 
+```
+
+
+### Plotting
+```{r, include=FALSE}
+affect <- affect %>% mutate(ID = as.factor(ID))
+```
+
+Individual Data
+
+```{r, echo = F, warning=F}
+ggplot(affect, aes(timepoint, FS, color = date)) + facet_wrap(~ID) +
+geom_point() + geom_line()
+```
+
+
+Mean growth pattern across individuals on the different time points
+```{r, echo = F, warning=F}
+ggplot(affect, aes(timepoint, FS)) + facet_wrap(~date) +
+   stat_summary(fun.y = mean, geom = "line") +
+  stat_summary(fun.data = mean_se, geom = "pointrange")
+```
+
+Mean growth pattern across individuals and time points
+```{r, echo = F, warning=F}
+ggplot(affect, aes(timepoint, FS)) +
+  stat_summary(fun.y = mean, geom = "line") 
+```
+
+
+### Data Analaysis
+
+We are interested in the variability of the affective response. 
+
+First describe the overall group pattern and then describe how individual participants differ from that pattern
+```{r, echo = F}
+m0a <- lmer(FS~ 1 + (1|ID), REML = FALSE, data = affect)
+
+m0b1 <- lmer(FS~ 1 + (1|ID) + (1|date), REML = FALSE, data = affect)
+
+m0b2 <- lmer(FS~ 1 + (1|ID) + (1|school_ID), REML = FALSE, data = affect)
+
+m0b3 <- lmer(FS~ 1 + (1|school_ID/ID), REML = FALSE, data = affect)
+
+m0c <- lmer(FS~ 1 + (1|ID) +  (1|date) + (1|school_ID), REML = FALSE, data = affect) # singular fit 
+
+anova(m0a, m0b1, m0b2, m0b3, m0c)
+```
+Random Effect structure
+
+* There is no significant variability in  mean affect between schools, χ2(1) = 0.0003, p = 0.99, but between dates  χ2(1) = 6.26, p = 0.01.
+
+```{r, echo = F}
+tab_model(m0b1)
+```
+
+* There is a mean affect of 1.45 (95% CI: 0.70-2.20) on each date averaged over each child across all timepoints.
+* Individuals vary around this grand mean by τ00 = 2.93. The sessions vary around the grand mean by τ00 = 0.20
+* Individiuals vary around their own mean by σ2 = 3.43
+
+ICC/Conditional R2: 48% of the variance lies between individuals, while 52% lies within individuals. 
+
+```{r, echo = F}
+plot_model(m0b1, type = "re")
+```
+
+
+Questions:
+
+* Which is the right random effect structure?
+  + Do I need something like (1|school_ID/ID) to account for the nested data structure?
+* Correct interpretation of the coefficient?
+* How to calculate ICC for the different levels? 
+
+
+
+
+
+# Model 1: with time variable 
+```{r, echo = F}
+library(lmerTest)
+m1b.1 <- lmer(FS~ timepoint + (1|ID) + (1|date), REML = FALSE, data = affect) 
+
+m1b.2 <- lmer(FS~ timepoint + (timepoint|ID) + (1|date), REML = FALSE, data = affect) 
+anova(m0b1, m1b.1, m1b.2)
+```
+
+There is a significant effect of time , but not signficant interindividual variablity in the affect slopes over time of individuals. 
+
+
+# Physiological responses
+## Heart Rate
+```{r, echo = F}
+HR.0 <- lmer(HR~ 1 + (1|ID) + (1|date), REML = FALSE, data = hexaff_all) 
+
+tab_model(HR.0)
+```
+
+
+# Combining psychological and physiological responses 
+
+*How to deal with the fact that we have sampled physiological responses every second and psychological responses every 10 minutes?*
+
+```{r}
+FS.HR <- lmer(FS~ HR + (1|ID) + (1|date), REML = FALSE, data = hexaff_all) 
+tab_model(FS.HR)
+
+plot_model(FS.HR, type = "pred")
+```
+
+I think I need to aggregate the HR data and take the mean for each timepoint when affect was measured?!
+
+```{r}
+hexaff_all_agg <- hexaff_all %>% group_by(ID, timepoint, date) %>% summarize(M_FS = mean(FS, na.rm = TRUE), M_HR = mean(HR, na.rm = TRUE))
+
+FS.HR.agg <- lmer(M_FS~ M_HR + (1|ID) + (1|date), REML = FALSE, data = hexaff_all_agg) 
+tab_model(FS.HR.agg)
+
+FS.HR.agg.RS <- lmer(M_FS~ M_HR + (M_HR|ID) + (1|date), REML = FALSE, data = hexaff_all_agg, control = lmerControl(calc.derivs = FALSE)) 
+tab_model(FS.HR.agg.RS)
+
+anova(FS.HR.agg, FS.HR.agg.RS)
+```
+

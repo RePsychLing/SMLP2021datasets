@@ -1,0 +1,126 @@
+---
+title: 'Orthographic choice analysis'
+author: 'Athanassios Protopapas'
+date: "17 June 2021"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, message=FALSE, warning=FALSE}
+library(MASS)
+library(lme4)
+```
+
+## Introduction
+
+In this document we report analyses for orthographic choice in an orthographic learning study.
+
+The outcome measure is orthographic choice (variable `orthaccu`, coded per item/trial as 1=correct, 0=incorrect).
+Prior to these two tasks, children had been exposed to 0, 2, or 6 repetitions (variable `reps`) of each item (different combinations for different children).
+There are two groups of participants, namely children in Grades 2 and 5 (G2 vs. G5). 
+There are two types of items, words (lexicality "w") and pseudowords (lexicality "p") (variable `lex2`).
+There are two word lengths, namely one or 2 syllables (variable `Nsyl2` with values 1 and 2).
+Each 2-level categorical predictor is coded into a numeric variable with values −0.5 and +0.5, indicated with a final letter C.
+
+```{r load_data, cache=TRUE}
+load("somdemo.Rda")
+som$gradeC <- ifelse(som$grade=="G2",-0.5,+0.5) # G2 is -0.5, G5 is +0.5
+som$lex2C  <- ifelse(som$lex2 =="w", -0.5,+0.5) #  w is -0.5,  p is +0.5
+som$Nsyl2C <- ifelse(som$Nsyl2=="1", -0.5,+0.5) # 1s is -0.5, 2s is +0.5
+str(som)
+```
+
+Considering all three levels of exposure, we want the models to test for successive differences, i.e., evidence for orthographic learning after 2 exposures ("early learning") or for difference between 2 and 6 exposures ("late learning"). We also want a grand-mean intercept so to be able to interpret coefficients as effects on differences. This is accomplished via `contr.sdif` from library `MASS`. However, to induce the random structure to also compute variances/covariances for the same contrast terms is not accomplished by default in `glmer`, so we use elements from the model matrix as shown by [Kliegl (2014)](https://rpubs.com/Reinhold/22193).
+
+## Retrieve coefficients for model matrix
+
+We first fit a model with minimal random structure to obtain the model matrix.
+
+```{r oc0, cache=TRUE}
+reps.contr.sdif <- contr.sdif(3)
+colnames(reps.contr.sdif) <- c("2_0","6_2") # rename for legibility
+contrasts( som$reps ) <- reps.contr.sdif
+olfrm0 <- as.formula( "orthaccu ~ 1 + reps*lex2C*gradeC + (1|sID) + (1|targetS)" )
+ol3c0 <- glmer( olfrm0, som, family=binomial, control=glmerControl(optCtrl=list(maxfun=1e5), optimizer = "nloptwrap") )
+```
+
+We then recover the columns associated with the simple successive differences
+
+```{r modmat, cache=TRUE}
+reps2_0 <- model.matrix(ol3c0)[,"reps2_0"] # 2 vs 0 reps
+reps6_2 <- model.matrix(ol3c0)[,"reps6_2"] # 6 vs 2 reps
+```
+
+## Fit model for lexicality and grade
+
+Now we can specify the model with the full random structure including interactions between reps and each of the predictors. Note that grade only varies within item and lexicality only varies within participant.
+
+```{r coc1, cache=TRUE}
+olfrm1 <- as.formula( "orthaccu ~ 1 + reps*lex2C*gradeC + ((reps6_2+reps2_0)*lex2C|sID) + ((reps6_2+reps2_0)*gradeC|targetS)" ) 
+ol3c1 <- glmer( olfrm1, som, family=binomial, control=glmerControl(optCtrl=list(maxfun=1e5), optimizer = "nloptwrap") )
+print(summary(ol3c1),corr=F)
+``` 
+
+The singular convergence indicates that the model is overparameterized, that is, there are too many parameters to estimate in the random structure in relation to the observed variability, but the model has converged and seems otherwise usable.
+
+## Fit and compare reduced model
+
+Indeed the correlation parameters and some of the random effects variances are redundant, as removing them does not result in significantly inferior model fit.
+
+We first remove correlations between random effects, the resulting model is no worse.
+
+```{r coc2, cache=TRUE}
+olfrm2 <- as.formula( "orthaccu ~ 1 + reps*lex2C*gradeC + ((reps6_2+reps2_0)*lex2C||sID) + ((reps6_2+reps2_0)*gradeC||targetS)" )
+ol3c2 <- glmer( olfrm2, som, family=binomial, control=glmerControl(optCtrl=list(maxfun=1e5), optimizer = "nloptwrap") )
+print(summary(ol3c2),corr=F)
+anova(ol3c1,ol3c2)
+```
+
+We then iteratively remove random effects that are near zero, starting with higher-order ones. This eventually results in a model with nonsingular fit that is no worse than that of the original model (with full random structure).  Convergence is achieved using a different optimizer.
+
+```{r coc3, cache=TRUE}
+olfrm3 <- as.formula( "orthaccu ~ 1 + reps*lex2C*gradeC + (reps6_2||sID) + (reps2_0+reps6_2+gradeC||targetS)" )
+ol3c3 <- glmer( olfrm3, som, family=binomial, control=glmerControl(optCtrl=list(maxfun=1e5), optimizer = "bobyqa") )
+print(summary(ol3c3),corr=F)
+anova(ol3c1,ol3c3)
+```
+
+Removing random effects parameters also reduces the estimated standard error for the fixed effects, which means the model is less conservative, leading to higher power and possibly an inflated Type-I error rate. Indeed, some effects that did not reach significance in the model with a full random structure are significant in the model with reduced random structure, such as the overall learning effect (comparisons between 0 and 2 and between 2 and 6 exposures). 
+
+## Checking for effects of length
+
+A model can also be fit to include effects of length (1 vs. 2 syllables).  First we start with all factors fully interacting.  We clearly do not have power to detect three- or four-way interactions, not to mention the difficulties trying to interpret them. But we can retain them in the model so that the main effects are more accurately estimated (regardless of significance testing considerations).
+
+To achieve a somewhat manageable but not too restrictive random structure, we include random slopes for the interactions of all three factors (grade, lexicality, length) with exposure (reps), but no higher-order interactions. Fixed-effects factors are allowed to interact fully.
+
+```{r oln2, cache=TRUE}
+olfn2 <- as.formula("orthaccu ~ 1 + reps*lex2C*gradeC*Nsyl2C + (1|sID) + (0+(reps6_2+reps2_0)*lex2C|sID) + (0+(reps6_2+reps2_0)*Nsyl2C|sID) + (1|targetS) + (0+(reps6_2+reps2_0)*gradeC|targetS)")
+oln2  <- glmer( olfn2, som, family=binomial, control=glmerControl(optCtrl=list(maxfun=1e5), optimizer = "bobyqa") )
+print(summary(oln2),corr=F)
+```
+
+This leads to singular fit due to overparameterized random structure. With subsequent reductions as above we can reach a reduced model with nonsingular fit.
+
+```{r oln4, cache=TRUE}
+olfn4 <- as.formula("orthaccu ~ 1 + reps*lex2C*gradeC*Nsyl2C + (reps6_2+reps6_2:Nsyl2C||sID) + (reps6_2+reps2_0+gradeC||targetS)")
+oln4  <- glmer( olfn4, som, family=binomial, control=glmerControl(optCtrl=list(maxfun=1e5), optimizer = "bobyqa") )
+print(summary(oln4),corr=F)
+```
+
+The model with reduced random structure is no worse than the original model with all random slopes:
+
+```{r cmp24, cache=TRUE}
+anova(oln2,oln4)
+```
+
+The reduced model is not less conservative than the original model when it comes to detecting significant two-way interactions with reps. Indeed, an effect of lexicality on early learning that was significant in the original (exposures(2-0) $\times$ lexicality) is not significant in the reduced model, despite the lack of corresponding random slopes. In fact the estimates and standard errors for all terms are very similar in the two models. This is consistent with the idea that full random structures are important for controlling Type I error rate only when they are supported by the data; degenerate random structures only reduce power. 
+
+The analysis with the length factor included confirms that there are no major effects on orthographic learning rate by either variable; and the the variable most likely to have an effect (smaller than can be confidently detected by the present sample) is lexicality.
+
+## Session information
+
+```{r sesinf}
+sessionInfo()
+```
