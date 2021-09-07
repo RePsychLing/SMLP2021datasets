@@ -210,6 +210,12 @@ md"""
 This plot shows that the random effects for subject are substantial, reflecting what we saw in the shrinkage plot, and a few of the random effects for condition by subject  have prediction intervals that do not overlap zero.
 """
 
+# ╔═╡ 0d531471-076f-4e07-a7a9-9f2005d583be
+sum(leverage(m2))
+
+# ╔═╡ 5e72ae53-c55c-4800-aa01-97d2ffde18b7
+sum(leverage(m1))
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -1450,5 +1456,7 @@ version = "3.5.0+0"
 # ╟─e58f70f5-36b1-45f7-83fe-f861fa806ba3
 # ╠═06a8bb39-e030-4f04-a4c7-6b0755137c19
 # ╟─d3b25e36-c042-4510-b8da-01a13b610b40
+# ╠═0d531471-076f-4e07-a7a9-9f2005d583be
+# ╠═5e72ae53-c55c-4800-aa01-97d2ffde18b7
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
