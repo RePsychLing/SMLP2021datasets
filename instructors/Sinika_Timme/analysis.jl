@@ -16,13 +16,14 @@ end
 
 # ╔═╡ 5d7dc2d4-1008-11ec-2ea6-ffc13cf6dbf7
 begin
+	using CategoricalArrays
 	using CSV
 	using DataFrames
 	using CairoMakie
-	CairoMakie.activate!(type="svg")
+	CairoMakie.activate!(type="png")
 	using AlgebraOfGraphics
 	using MixedModels
-	# using MixedModelsExtras
+	using MixedModelsExtras
 	using MixedModelsMakie
 	using Effects
 	using PlutoUI
@@ -108,9 +109,6 @@ md"""
 	In my experience, this is often symptomatic of a misspecified model.
 """
 
-# ╔═╡ 7eb0d02f-eb0e-49fb-9ff5-50a4108f8d30
-fm2.optsum
-
 # ╔═╡ 60fed847-bd2c-4896-a43a-d5cca63786d3
 shrinkageplot(fm2)
 
@@ -191,6 +189,9 @@ md"""
 ## Model Diagnostics (of `fm3`)
 """
 
+# ╔═╡ 3198e0c5-588e-4bcd-bb62-ecba0ca129a2
+fm3.optsum
+
 # ╔═╡ f2a1b2d0-7bae-4ab6-a287-e42d02e01383
 scatter(fitted(fm3), response(fm3))
 
@@ -220,10 +221,10 @@ coefplot(fm3)
 boot = parametricbootstrap(MersenneTwister(42), 1000, fm3)
 
 # ╔═╡ cb5aafb6-a724-428f-aa15-22ed30b42b08
-coefplot(fm3)
+coefplot(boot)
 
 # ╔═╡ 12ce0e46-fb15-4396-84d7-212c5d850423
-ridgeplot(fm3)
+ridgeplot(boot)
 
 # ╔═╡ 8f073561-8b51-4a6d-b08d-225821bf7d56
 design = Dict(:timepoint => unique(skipmissing(dat.timepoint)))
@@ -240,18 +241,37 @@ eff = effects(design, fm3)
 # ╔═╡ 1a36289a-4b08-4aed-adbb-de4dea5e504f
 begin
 	plt = data(eff) * mapping(:timepoint, :FS; lower=:lower, upper=:upper) *
-      (visual(Lines) + visual(LinesFill))
+      (visual(Lines) + visual(LinesFill; color=:blue))
 	draw(plt)
 end
 
 # ╔═╡ cf4d7b94-abf0-4338-b72a-f60aaefe9a90
 begin
-	data(dat) * mapping(:timepoint, :FS; :layout=:ID) * visual(Scatter; color=(:black,0.3)) |> draw
+	data(dat) * mapping(:timepoint, :FS; layout=:ID) * visual(Scatter) |> draw
+end
+
+# ╔═╡ 0aef95c5-0e48-4ff7-b8a3-58d4e8c94c0b
+begin
+	dat2 = transform(dat, :ID => categorical; renamecols=false)
+	dat2.fitted = fitted(fm3)
+	# important for connecting the dots in plotting later
+	sort!(dat2, [:date, :ID, :timepoint]) 
+	describe(dat2)
 end
 
 # ╔═╡ 6acc4e05-d650-40ca-abf9-9cccd401ed45
 begin
-	plt + data(dat) * mapping(:timepoint, :FS; :layout=:ID) * visual(Scatter; color=(:black,0.3)) |> draw
+	plt2 = plt + data(dat2) * mapping(:timepoint, :FS; layout=:ID) * visual(Scatter; color=:black) 
+	# note that it's "axis" and "figure" -- each panel/facet is an axis
+	# so each of those is 300x300 which means the entire figure is much bigger
+	# but pluto has scaled it for display purposes here
+	draw(plt2; axis=(width=300, height=300))
+end
+
+# ╔═╡ 32d56757-1e1b-43dd-a9aa-83b5177172e9
+begin
+	plt3 = plt2 + data(dat2) * mapping(:timepoint, :fitted; layout=:ID, color=:date) * visual(Lines)
+	draw(plt3; axis=(width=300, height=300))
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -260,10 +280,12 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+CategoricalArrays = "324d7699-5711-5eae-9e2f-1d82baa6b597"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Effects = "8f03c58b-bd97-4933-a826-f71b64d2cca2"
 InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
+MixedModelsExtras = "781a26e1-49f4-409a-8f4c-c3159d78c17e"
 MixedModelsMakie = "b12ae82c-6730-437f-aff9-d2c38332a376"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
@@ -273,9 +295,11 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 AlgebraOfGraphics = "~0.5.3"
 CSV = "~0.8.5"
 CairoMakie = "~0.6.5"
+CategoricalArrays = "~0.10.0"
 DataFrames = "~1.2.2"
 Effects = "~0.1.2"
 MixedModels = "~4.1.1"
+MixedModelsExtras = "~0.1.2"
 MixedModelsMakie = "~0.3.8"
 PlutoUI = "~0.7.9"
 """
@@ -398,6 +422,12 @@ deps = ["Artifacts", "Bzip2_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll",
 git-tree-sha1 = "f2202b55d816427cd385a9a4f3ffb226bee80f99"
 uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
 version = "1.16.1+0"
+
+[[CategoricalArrays]]
+deps = ["DataAPI", "Future", "JSON", "Missings", "Printf", "RecipesBase", "Statistics", "StructTypes", "Unicode"]
+git-tree-sha1 = "1562002780515d2573a4fb0c3715e4e57481075e"
+uuid = "324d7699-5711-5eae-9e2f-1d82baa6b597"
+version = "0.10.0"
 
 [[ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
@@ -966,6 +996,12 @@ deps = ["Arrow", "DataAPI", "Distributions", "GLM", "JSON3", "LazyArtifacts", "L
 git-tree-sha1 = "f318e42a48ec0a856292bafeec6b07aed3f6d600"
 uuid = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
 version = "4.1.1"
+
+[[MixedModelsExtras]]
+deps = ["MixedModels", "Statistics", "StatsBase"]
+git-tree-sha1 = "3b01c97c288924fd67958ab12b8a5ea541edc5e5"
+uuid = "781a26e1-49f4-409a-8f4c-c3159d78c17e"
+version = "0.1.2"
 
 [[MixedModelsMakie]]
 deps = ["DataFrames", "Distributions", "KernelDensity", "LinearAlgebra", "Makie", "MixedModels", "Printf", "SpecialFunctions", "StatsBase"]
@@ -1541,7 +1577,6 @@ version = "3.5.0+0"
 # ╠═fd153bbb-5273-4b36-a111-2d34137b10bd
 # ╠═06703b73-e491-4112-a59d-28d2e477d0a6
 # ╟─22e90698-2dd6-4cf3-a694-a0fabd2a0302
-# ╠═7eb0d02f-eb0e-49fb-9ff5-50a4108f8d30
 # ╠═60fed847-bd2c-4896-a43a-d5cca63786d3
 # ╠═d98f7985-2c65-46e4-a356-d9cb57c2b829
 # ╠═34151154-5ecb-4651-b519-0cb006de1d15
@@ -1560,6 +1595,7 @@ version = "3.5.0+0"
 # ╠═11a942a9-edc5-4345-b74f-579b27ca4296
 # ╠═729ac680-e1d1-41cc-8566-1e5cc1d8cb91
 # ╟─2c2c3b51-426d-41ec-acad-7e6c1e6fae48
+# ╠═3198e0c5-588e-4bcd-bb62-ecba0ca129a2
 # ╠═f2a1b2d0-7bae-4ab6-a287-e42d02e01383
 # ╠═b16e6a8d-db29-4cc6-911b-3ebb3c8f71c0
 # ╠═ee60825b-808f-49da-9dd8-824aa85d2c76
@@ -1575,7 +1611,9 @@ version = "3.5.0+0"
 # ╠═fd193833-b163-4182-a85b-84085c747f71
 # ╠═1a36289a-4b08-4aed-adbb-de4dea5e504f
 # ╠═cf4d7b94-abf0-4338-b72a-f60aaefe9a90
+# ╠═0aef95c5-0e48-4ff7-b8a3-58d4e8c94c0b
 # ╠═6acc4e05-d650-40ca-abf9-9cccd401ed45
+# ╠═32d56757-1e1b-43dd-a9aa-83b5177172e9
 # ╠═78090450-7373-4824-bfe9-1283e971dda0
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
