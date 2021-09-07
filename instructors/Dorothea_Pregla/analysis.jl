@@ -5,7 +5,14 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ fdf6853c-ddbf-4fd6-b4ca-c65b52f5b036
-using CairoMakie, CSV, DataFrames, MixedModels, MixedModelsMakie
+begin
+	using CairoMakie
+	using CSV
+	using DataFrames
+	using MixedModels
+	using MixedModelsMakie
+	CairoMakie.activate!(type="svg")
+end
 
 # ╔═╡ 7bb303da-e728-11eb-3cef-4f96ce335414
 md"""
@@ -26,6 +33,7 @@ Read the data from the .csv file and convert to a DataFrame.
 
 # ╔═╡ 112a2d45-642a-4156-abfc-ec7377ba637e
 df = CSV.File("../../Dorothea_Pregla/SPL_decl.csv", missingstring="NA") |> DataFrame
+# or CSV.read("../../Dorothea_Pregla/SPL_decl.csv", DataFrame; missingstring="NA")
 
 # ╔═╡ 7f491d16-0dc4-4acf-86d8-c72ccd13836f
 md"""
@@ -108,6 +116,22 @@ Check that `condition`, `subj_status` and their interaction use the -1/+1 encodi
 
 # ╔═╡ a09af6fd-d204-411f-b2ee-6712ce2b754d
 Int.(m1.X')   # transpose of fixed-effects model matrix as integers (to save space)
+
+# ╔═╡ 02cb5651-e0c9-4dec-9962-1191e4238674
+md"""
+The contrasts on `subj_status` and `condition` produce a +1/-1 coding and, if the data were balanced, these would give an `X'X` matrix which is diagonal.  (Even more, it would be a multiple of the identity, if you know what that expression means.)
+
+In this case, the `subj_status` factor is observational rather than a controlled experimental factor and the levels are unbalanced.
+"""
+
+# ╔═╡ 5b704af5-8cb2-4ce4-8efe-1c32beb3b137
+combine(groupby(filter(:region => ==("2"), df), :subj_status), nrow)
+
+# ╔═╡ 356893dd-b0b4-4ffe-a3f7-0d37b62c1cce
+md"resulting in some off-diagonal non-zeros in `X'X`"
+
+# ╔═╡ abbe119c-0746-4a3d-afd2-ff669892423a
+m1.X'm1.X
 
 # ╔═╡ 51e4a5c2-6a46-4de2-9763-00705fe508de
 md"""
@@ -1410,6 +1434,10 @@ version = "3.5.0+0"
 # ╠═7cc1000d-fb72-4692-baca-a7001424e216
 # ╟─7f75d0e8-1cf4-4f82-ba81-6ff96de41315
 # ╠═a09af6fd-d204-411f-b2ee-6712ce2b754d
+# ╟─02cb5651-e0c9-4dec-9962-1191e4238674
+# ╠═5b704af5-8cb2-4ce4-8efe-1c32beb3b137
+# ╟─356893dd-b0b4-4ffe-a3f7-0d37b62c1cce
+# ╠═abbe119c-0746-4a3d-afd2-ff669892423a
 # ╟─51e4a5c2-6a46-4de2-9763-00705fe508de
 # ╠═e261b642-ed8e-4c00-9ec5-b037e82af0e2
 # ╟─f7f6d39b-3ca0-48fe-b85d-6feaab5edf54
