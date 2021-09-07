@@ -42,7 +42,7 @@ First load the packages to be used, read the .csv file, and convert it to a Data
 """
 
 # ╔═╡ 1ad1a572-22e4-4c9d-b893-95f270c795d0
-orig = CSV.File("../../Dorothea_Pregla/SPL_decl.csv", missingstring="NA") |> DataFrame
+orig = CSV.read("../../Dorothea_Pregla/SPL_decl.csv", DataFrame; missingstring="NA") 
 
 # ╔═╡ 96410f16-b1a8-4207-802b-abb7eeb1d919
 size(orig)
