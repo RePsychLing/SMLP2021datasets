@@ -26,6 +26,7 @@ library(lme4)
 library(simstudy)
 library(MASS)
 library(interactions)
+library(arrow)
 
 #clear environment
 rm(list = ls())
@@ -196,6 +197,7 @@ accuracy_pergroup
 
 10: Get summary of data frame to check coding: 
 ```{r}
+write_feather(simdat, "simdat.arrow", compression="zstd")
 str(simdat)
 ```
 
