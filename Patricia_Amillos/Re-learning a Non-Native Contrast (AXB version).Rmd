@@ -1,0 +1,183 @@
+---
+title: "Re-learning a Non-Native Contrast (AXB version)"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lme4)
+library(sjPlot)
+```
+#### This RMD contains the data of 27 German native speaking adults who were taught to discriminate between the Hindi voiceless retroflex vs dental stop using a word learning-based training (i.e. cross-situational word learning).
+#### They completed the following tasks in this order:
+  1. Pre-Training AXB discrimination task (2 counterbalanced lists: A and B)
+  2. CSWL-based Training Task (watch a video, no responses collected; 2 counterbalanced training list: A and B)
+  3. Post-Training AXB discrimination (exactly the same as the pre-test)
+  4. Word Identification Task (Choose between 2 objects and click on the one named)
+  
+### AXB Performance
++ Goal: To see if there is an increase in their discrimination abilities of this non-native contrast after a training phase
++ Participants completed 36 trials in an AXB task. There were 12 trials where they only discriminated a native contrast (t vs d) in a non-word. This was only used to check attention throughout the task. This leaves 24 target trials where they had to discriminate the Hindi contrast.  
++ The 24 trials were further divided into 2 where they performed discrimination with 12 trained word pairs and 12 untrained word pairs.   
++ The trained word pair (tapsa-ʈapsa) appears in the CSWL training phase where each member of the pair is assigned an object as its referent.  
++ The untrained word pair (gosta-gosʈa) only appears in the AXB task and is not assigned any referent/meaning. It serves as a test of whether the ability to discriminate the contrast is generalized.
+
+#### Loading the combined AXB data (pre and post training values per participant)
+```{r, include=FALSE}
+axb_data <- read_csv("full_axb.csv") %>%
+   mutate_at(c("accuracy", "rt", "attempt", "NAtrials"), as.numeric) %>% #I need to count these to check scores
+    mutate_at(c("ID", "status", "word1", "word2", "word3", "response", "answer_key", "contrast", "cswl_list", "item", "trained", "x_dental", "Task"), as.factor) #set as factors
+```
+
+```{r, echo =FALSE}
+head(axb_data)
+```
+
+#### Subset the data frame: include only target trials (those that tested the non-native contrast)
+#### Complete data set should have 1296 trials, but this only has 1274 (22 timed out trials)
+#### Contrast coding independent variables to match hypotheses
+```{r,include=FALSE}
+axb_targets <- axb_data %>%
+                filter(contrast=="hindi")
+
+#Establish factor levels for the DV (accuracy) and IVs (task and trained), and random effects (ID and item)
+
+
+check_factors <- function(a) {
+  output <- list(c(class(a), levels(a)))
+  return(output)
+} # a function that returns the class and levels of each factor
+
+#Accuracy: whether a response is correct or incorrect
+check_factors(axb_targets$accuracy)
+axb_targets$accuracy <- factor(axb_targets$accuracy, levels= c("0", "1")) # need to convert this back to factors because this was set as numeric to get the means for the plots (not in this script)
+contrasts(axb_targets$accuracy)
+
+#Task: whether the performance is in the pre-test or post-test
+axb_targets$Task <- factor(axb_targets$Task, levels = c("pre-test", "post-test")) #we are interested in performance change from before to after training
+
+#Trained: whether the response was for a trained word (tapsa) or untrained word (gosta)
+axb_targets$trained <- factor(axb_targets$trained, levels = c("1", "0")) #we expect that the trained pair (value = 1) has higher accuracy than the untrained pair (value = 0)
+
+#id: Just need this to be set to a factor to consider each participant as a group in the random effects
+class(axb_targets$ID) #the actual organization of levels does not matter; only the class
+
+#item: Also needs to be a factor to consider item as a grouping variable in the random effects
+check_factors(axb_targets$item) #this is to see if the items are still ordered in ascending order
+length(unique(axb_targets$item)) #this returns 24, which is the unique number of target items in the AXB task 
+```
+
+#### Task: Treatment coding is chosen because model should compare the pre-test(0) as baseline to the post-test (1)
+```{r, echo =FALSE}
+check_factors(axb_targets$Task) #returns the correct variable class and levels
+contrasts(axb_targets$Task)
+```
+#### Trained: Treatment contrast coding is also appropriate because the trained level=1 (treatment coded as "0") is the point of comparison for the untrained level=0 (treatment coded as "1"); the hypothesis is that the untrained words are less accurate than the trained words in the post-test, but will have above chance performance nonetheless
+```{r, echo=FALSE}
+check_factors(axb_targets$trained) #returns the correct variable class and levels
+contrasts(axb_targets$trained) #
+```
+
+#### Model 1: Binomial model with a full random effects structure
+#### This is my first choice for a model, the rationale being:
+ * The additive relationship between Task and trained is because we expect a similar positive slope from the pre-test and post-test for both trained and untrained words, even if the hypothesis is that the untrained words would have less steep slopes;
+ * There are by participant intercepts and slopes because it's possible that each participant has a different baseline and rate of learning from pre to post-test.
+ * There are also by item intercepts and slopes because some items may be easier/more difficult in the pre or post test. Possible factors not accounted for by the fixed effect is what contrast is discriminated before/after the item, because it's possible that participants are relying on an acoustic level strategy rather than phonemic.
+ 
+```{r}
+m1 <- glmer(accuracy ~Task + trained + (1+ Task|ID) + (1+ Task|item), data=axb_targets, family=binomial)
+
+summary(m1)
+```
+#### This model results in a singular fit. In the random effects structure, the by participant and by item slopes have a perfect correlation which I think is the source of this warning.
+
+#### I've also tried to use the sjPlot package (Lüdecke, 2020) to visualize the random effects structure. I'm not sure if there is an additional benefit doing this.
+#### The way I understand the plots, there is no random variation on whether the participant or item is in the pre/post test. Maybe this lack of variation is contributing to the perfect correlation in the random effects structure?
+```{r}
+plot_model(m1, type = "re")
+```
+
+#### I will list down the models I've attempted to run and the following errors they presented. I tried to simplify the random effects step-by-step. Although I do not have a strong rationale aside from this as to why I removed the participant components first before the items.
+* Model 2: glmer(accuracy ~Task + trained + (1|ID) + (0 + Task|ID)+ (1+ Task|item), data=axb_targets, family=binomial)
+  + Removed the correlation between the intercepts and slopes for the participants first
+  + Outcome: Singular fit
+* Model 3: glmer(accuracy ~Task + trained + (1|ID) + (1+ Task|item), data=axb_targets, family=binomial)
+  + Removed the participant slopes altogether. Only participant effects
+  + Outcome: Singular fit
+* Model 4: glmer(accuracy ~Task + trained + (1|ID) + (1|item) + (0+ Task|item), data=axb_targets, family=binomial)
+  + Removed correlation of the Task and items slopes
+  + Outcome: Singular fit
+
+#### The following model (m5) is a model where the random effects structure only contains intercepts and does not return any warnings.
+```{r}
+m5 <- glmer(accuracy ~Task + trained + (1|ID) + (1|item), data=axb_targets, family=binomial)
+
+summary(m5)
+```
+#### I also checked the residuals of m5. Despite it returning no warnings, it does not appear as a normal curve and there is a break in the qqplot. 
+```{r}
+#must run this entire sequence in one go for it to work
+m5_res<-residuals(m5)
+par(mfrow = c(1,4))
+hist(m5_res)
+plot(density(m5_res))
+qqnorm(m5_res)
+qqline(m5_res)
+plot(fitted(m5), m5_res)
+```
+
+#### I try to interpret the outcomes by converting the log odds into probabilities. However, I'm not sure how to interpet this afterwards. 
+```{r}
+# I take only the fixed effects of the model.
+fixef(m5)
+
+# Effect of Task (pre-test vs post test probabilities)
+# values taken from fixed effects
+axb_intercept <- 0.1263
+axb_taskslope <- -0.107032
+
+# log odds for getting a correct response in the pre-test
+axb_intercept+axb_taskslope*0
+
+# convert this into a probability
+plogis(axb_intercept+axb_taskslope*0)
+
+#Interpretation: In the pre-test, the predicted probability of a correct response for trained items is 0.53153
+
+##log odds for getting a correct response in the post-test
+axb_intercept+axb_taskslope*1
+
+##convert this into a probability
+plogis(axb_intercept+axb_taskslope*1)
+
+#Interpretation: In the post-test, the predicted probability of a correct response for trained items is 0.50482
+
+##log odds for getting a correct response for untrained items in the post-test
+axb_trainedslope <- 0.059417 #taken from fixed effects
+plogis(axb_intercept+axb_trainedslope*1)
+
+#Interpretation: The probability of getting a correct response in the post-test for untrained items as compared to trained items is 0.5463. 
+```
+
+## Word Identification Task  
+
+#### Word Identification Task: For the last task, participants completed a word identification task of 10 items.   
+ + These 10 items are divided into 6 minimal pair trials and 4 non-minimal pair trials. 
+ + Minimal pair trials are those where the object choices are tapsa and ʈapsa that requires ability to discriminate the non-native contrast.
++  Non-minimal pair trials are those where the object choices don't have minimal pairs as labels (e.g. lebno vs tapsa). Non-minimal pair trials serve as a control to see if participants were learning words during the training.
+
+#### The analysis for this data set is to compare if participant scores for minimal pair trials and non-minimal pair trials are each above chance level. I opted to do a one sample t-test against chance, but this has the weakness again of aggregating the scores per participant instead of looking at each individual trial. 
+
+### Is there a way to set a linear model to compare a dependent variable to chance performance? 
+
+```{r, include=FALSE}
+word_id <- read_csv("full_axb_wordcomp.csv") %>%
+    mutate_at(c("accuracy"), as.numeric) %>% 
+    mutate_at(c("ID", "status", "response", "target", "contrast", "minimalpair", "item"), 
+              as.factor)
+
+#Set the correct factor levels
+word_id$minimalpair <- factor(word_id$minimalpair, levels = c("0", "1"))
+```
+ 
