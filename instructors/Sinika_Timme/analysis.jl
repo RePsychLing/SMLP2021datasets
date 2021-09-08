@@ -20,7 +20,7 @@ begin
 	using CSV
 	using DataFrames
 	using CairoMakie
-	CairoMakie.activate!(type="png")
+	CairoMakie.activate!(type="svg")
 	using AlgebraOfGraphics
 	using MixedModels
 	using MixedModelsExtras
@@ -51,11 +51,17 @@ begin
 	dat = DataFrame(CSV.File("data/hexaff_all.csv"; 
 						  comment="#", 
 						  delim=';', 
-						  missingstring="NA", 
-						  drop=[1,2], 
-						  decimal=','))
+						  missingstring=["NA",""],
+						  downcast=true,
+						  drop=[1,2],
+						  ntasks=1, # this is due to a bug in CSV.jl-0.9 -- I'll try to get it fixed later
+						  decimal=','
+			))
 	dropmissing!(dat, [:FS, :timepoint, :date])
 end
+
+# ╔═╡ 11cb62b7-6736-47de-8c91-67b858747004
+# select(dat, Not([:FS, :HR]))
 
 # ╔═╡ 5aa0776d-3b03-4910-a2b7-e51c7404e1ee
 describe(dat)
@@ -68,22 +74,22 @@ md"""
 """
 
 # ╔═╡ c4a027a1-902f-48bc-8009-71653f766e8d
-fm1 = fit(MixedModel, 
-		  @formula(FS ~ 1 + timepoint + (1 + timepoint|ID)), 
-		  dat; 
-		  contrasts=Dict(:ID => Grouping()))
+# fm1 = fit(MixedModel, 
+# 		  @formula(FS ~ 1 + timepoint + (1 + timepoint|ID)), 
+# 		  dat; 
+# 		  contrasts=Dict(:ID => Grouping()))
 
 # ╔═╡ 88c9b542-448e-4a91-a985-24e4e8b863f5
-fm1.rePCA
+# fm1.rePCA
 
 # ╔═╡ 09a4adef-0d8b-4242-885b-e8dfb6d5b756
-shrinkageplot(fm1)
+# shrinkageplot(fm1)
 
 # ╔═╡ fab68835-d889-4bde-ad2a-80e5dc6b1983
-caterpillar(fm1)
+# caterpillar(fm1)
 
 # ╔═╡ 092c77a2-37aa-4c78-906a-322b61308b34
-VarCorr(fm1)
+# VarCorr(fm1)
 
 # ╔═╡ 9fd0c2d7-109d-4fe3-a0c6-a75839799cb7
 md"""
@@ -93,14 +99,14 @@ md"""
 """
 
 # ╔═╡ fd153bbb-5273-4b36-a111-2d34137b10bd
-fm2 = fit(MixedModel, 
-		  @formula(FS ~ 1 + timepoint * date + (1 + timepoint + date|ID)), 
-		  dat; 
-		  contrasts=Dict(:ID => Grouping(),
-						 :date => HelmertCoding()))
+# fm2 = fit(MixedModel, 
+# 		  @formula(FS ~ 1 + timepoint * date + (1 + timepoint + date|ID)), 
+# 		  dat; 
+# 		  contrasts=Dict(:ID => Grouping(),
+# 						 :date => HelmertCoding()))
 
 # ╔═╡ 06703b73-e491-4112-a59d-28d2e477d0a6
-fm2.rePCA
+# fm2.rePCA
 
 # ╔═╡ 22e90698-2dd6-4cf3-a694-a0fabd2a0302
 md"""
@@ -110,13 +116,13 @@ md"""
 """
 
 # ╔═╡ 60fed847-bd2c-4896-a43a-d5cca63786d3
-shrinkageplot(fm2)
+# shrinkageplot(fm2)
 
 # ╔═╡ d98f7985-2c65-46e4-a356-d9cb57c2b829
-caterpillar(fm2)
+# qqcaterpillar(fm2)
 
 # ╔═╡ 34151154-5ecb-4651-b519-0cb006de1d15
-VarCorr(fm2)
+# VarCorr(fm2)
 
 # ╔═╡ ea9a452a-086d-437d-9ada-47f7cbd5398c
 md"""
@@ -136,13 +142,13 @@ fm3 = fit(MixedModel,
 fm3.rePCA
 
 # ╔═╡ 5299c521-e359-4e5d-ace3-73766a323b1d
-shrinkageplot(fm3)
+# shrinkageplot(fm3)
 
 # ╔═╡ 2891251e-e32f-4654-9243-296f6206429c
-qqcaterpillar(fm3)
+# qqcaterpillar(fm3)
 
 # ╔═╡ f77aa540-579e-4367-a1ab-b863a8d015d9
-VarCorr(fm3)
+# VarCorr(fm3)
 
 # ╔═╡ 0d204adc-5a4c-4276-ba83-690178bc570c
 md"""
@@ -155,34 +161,28 @@ md"""
 """
 
 # ╔═╡ 14b559e6-4e2a-43e3-ad92-4d90342c8835
-fm4 = fit(MixedModel, 
-		  @formula(FS ~ 1 + timepoint + zerocorr(1 + timepoint|ID & date)), 
-		  dat; 
-		  contrasts=Dict(:ID => Grouping(),
-						 :date => Grouping(),
-						 :timepoint => SeqDiffCoding()))
+# fm4 = fit(MixedModel, 
+# 		  @formula(FS ~ 1 + timepoint + zerocorr(1 + timepoint|ID & date)), 
+# 		  dat; 
+# 		  contrasts=Dict(:ID => Grouping(),
+# 						 :date => Grouping(),
+# 						 :timepoint => SeqDiffCoding()))
 
 # ╔═╡ 02de86be-40ea-4b62-8e54-c7529e57fa31
-MixedModels.likelihoodratiotest(fm3, fm4)
+# MixedModels.likelihoodratiotest(fm3, fm4)
 
 # ╔═╡ 54e69118-d930-49ba-9bd7-afbf614dda75
-begin
-	with_terminal() do 
-		show(fm4)
-	end
-end
+# begin
+# 	with_terminal() do 
+# 		show(fm4)
+# 	end
+# end
 
 # ╔═╡ 18a6b29b-94b4-46e6-8242-45dbea143700
-aicc.([fm3, fm4])
+# aicc.([fm3, fm4])
 
 # ╔═╡ d223139b-f209-4495-ad6a-69e91f524690
-fm4.rePCA
-
-# ╔═╡ 11a942a9-edc5-4345-b74f-579b27ca4296
-shrinkageplot(fm4)
-
-# ╔═╡ 729ac680-e1d1-41cc-8566-1e5cc1d8cb91
-qqcaterpillar(fm4)
+# fm4.rePCA
 
 # ╔═╡ 2c2c3b51-426d-41ec-acad-7e6c1e6fae48
 md"""
@@ -192,14 +192,24 @@ md"""
 # ╔═╡ 3198e0c5-588e-4bcd-bb62-ecba0ca129a2
 fm3.optsum
 
+# ╔═╡ 4d14f8a6-17b1-406d-8f4c-1199ee0f9966
+# begin 
+# 	fm5 = LinearMixedModel(@formula(FS ~ 1 + timepoint + (1 + timepoint|ID & date)), dat; 
+# 		  contrasts=Dict(:ID => Grouping(),
+# 						 :date => Grouping()))
+# 	fm5.optsum.optimizer = :LN_COBYLA
+# 	fit!(fm5)
+# 	fm5.optsum
+# end
+
 # ╔═╡ f2a1b2d0-7bae-4ab6-a287-e42d02e01383
-scatter(fitted(fm3), response(fm3))
+# scatter(fitted(fm3), response(fm3))
 
 # ╔═╡ b16e6a8d-db29-4cc6-911b-3ebb3c8f71c0
-scatter(residuals(fm3), fitted(fm3))
+# scatter(residuals(fm3), fitted(fm3))
 
 # ╔═╡ ee60825b-808f-49da-9dd8-824aa85d2c76
-qqnorm(fm3)
+# qqnorm(fm3)
 
 # ╔═╡ 9f4c72f1-aa01-4666-b07b-e2fb1f0cacb3
 md"""
@@ -207,7 +217,7 @@ md"""
 """
 
 # ╔═╡ fce2e257-897f-487b-b0e3-fb5942820ed2
-icc(fm3)
+# icc(fm3)
 
 # ╔═╡ e4d72691-6d31-47e5-b1e0-630571988330
 md"""
@@ -215,64 +225,65 @@ md"""
 """
 
 # ╔═╡ e062623c-9dee-49f3-8f8a-362d0073eb60
-coefplot(fm3)
+# coefplot(fm3)
 
 # ╔═╡ 9533ef07-6e79-4f17-8626-cc85413957b9
-boot = parametricbootstrap(MersenneTwister(42), 1000, fm3)
+# boot = parametricbootstrap(MersenneTwister(42), 1000, fm3)
 
 # ╔═╡ cb5aafb6-a724-428f-aa15-22ed30b42b08
-coefplot(boot)
+# coefplot(boot)
 
 # ╔═╡ 12ce0e46-fb15-4396-84d7-212c5d850423
-ridgeplot(boot)
+# ridgeplot(boot)
 
 # ╔═╡ 8f073561-8b51-4a6d-b08d-225821bf7d56
-design = Dict(:timepoint => unique(skipmissing(dat.timepoint)))
+# design = Dict(:timepoint => unique(skipmissing(dat.timepoint)))
 
 # ╔═╡ 23d494fd-52cb-4679-a186-c6d795299a97
-eff = effects(design, fm3)
+# eff = effects(design, fm3)
 
 # ╔═╡ fd193833-b163-4182-a85b-84085c747f71
 # begin
+#   # convert to 95% CIs instead of standard errors
 # 	@. eff.lower = eff.FS - 1.96 * eff.err
 # 	@. eff.upper = eff.FS + 1.96 * eff.err
 # end
 
 # ╔═╡ 1a36289a-4b08-4aed-adbb-de4dea5e504f
-begin
-	plt = data(eff) * mapping(:timepoint, :FS; lower=:lower, upper=:upper) *
-      (visual(Lines) + visual(LinesFill; color=:blue))
-	draw(plt)
-end
+# begin
+# 	plt = data(eff) * mapping(:timepoint, :FS; lower=:lower, upper=:upper) *
+#       (visual(Lines) + visual(LinesFill; color=:black))
+# 	draw(plt)
+# end
 
 # ╔═╡ cf4d7b94-abf0-4338-b72a-f60aaefe9a90
-begin
-	data(dat) * mapping(:timepoint, :FS; layout=:ID) * visual(Scatter) |> draw
-end
+# begin
+# 	data(dat) * mapping(:timepoint, :FS; layout=:ID) * visual(Scatter) |> draw
+# end
 
 # ╔═╡ 0aef95c5-0e48-4ff7-b8a3-58d4e8c94c0b
-begin
-	dat2 = transform(dat, :ID => categorical; renamecols=false)
-	dat2.fitted = fitted(fm3)
-	# important for connecting the dots in plotting later
-	sort!(dat2, [:date, :ID, :timepoint]) 
-	describe(dat2)
-end
+# begin
+# 	dat2 = transform(dat, :ID => categorical; renamecols=false)
+# 	dat2.fitted = fitted(fm3)
+# 	# important for connecting the dots in plotting later
+# 	sort!(dat2, [:date, :ID, :timepoint]) 
+# 	describe(dat2)
+# end
 
 # ╔═╡ 6acc4e05-d650-40ca-abf9-9cccd401ed45
-begin
-	plt2 = plt + data(dat2) * mapping(:timepoint, :FS; layout=:ID) * visual(Scatter; color=:black) 
-	# note that it's "axis" and "figure" -- each panel/facet is an axis
-	# so each of those is 300x300 which means the entire figure is much bigger
-	# but pluto has scaled it for display purposes here
-	draw(plt2; axis=(width=300, height=300))
-end
+# begin
+# 	plt2 = plt + data(dat2) * mapping(:timepoint, :FS; layout=:ID) * visual(Scatter; color=:black) 
+# 	# note that it's "axis" and "figure" -- each panel/facet is an axis
+# 	# so each of those is width x height which means the entire figure is much bigger
+# 	# but pluto has scaled it for display purposes here
+# 	draw(plt2; axis=(width=150, height=150))
+# end
 
 # ╔═╡ 32d56757-1e1b-43dd-a9aa-83b5177172e9
-begin
-	plt3 = plt2 + data(dat2) * mapping(:timepoint, :fitted; layout=:ID, color=:date) * visual(Lines)
-	draw(plt3; axis=(width=300, height=300))
-end
+# begin
+# 	plt3 = plt2 + data(dat2) * mapping(:timepoint, :fitted; layout=:ID, color=:date) * visual(Lines)
+# 	draw(plt3; axis=(width=150, height=150))
+# end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -293,7 +304,7 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [compat]
 AlgebraOfGraphics = "~0.5.3"
-CSV = "~0.8.5"
+CSV = "~0.9.0"
 CairoMakie = "~0.6.5"
 CategoricalArrays = "~0.10.0"
 DataFrames = "~1.2.2"
@@ -400,10 +411,10 @@ uuid = "fa961155-64e5-5f13-b03f-caf6b980ea82"
 version = "0.4.1"
 
 [[CSV]]
-deps = ["Dates", "Mmap", "Parsers", "PooledArrays", "SentinelArrays", "Tables", "Unicode"]
-git-tree-sha1 = "b83aa3f513be680454437a0eee21001607e5d983"
+deps = ["CodecZlib", "Dates", "FilePathsBase", "Mmap", "Parsers", "PooledArrays", "SentinelArrays", "Tables", "Unicode", "WeakRefStrings"]
+git-tree-sha1 = "24e8646b28d573b10be1c6dab18fb336846a955c"
 uuid = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
-version = "0.8.5"
+version = "0.9.0"
 
 [[Cairo]]
 deps = ["Cairo_jll", "Colors", "Glib_jll", "Graphics", "Libdl", "Pango_jll"]
@@ -624,6 +635,12 @@ deps = ["Pkg", "Requires", "UUIDs"]
 git-tree-sha1 = "937c29268e405b6808d958a9ac41bfe1a31b08e7"
 uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
 version = "1.11.0"
+
+[[FilePathsBase]]
+deps = ["Dates", "Mmap", "Printf", "Test", "UUIDs"]
+git-tree-sha1 = "0f5e8d0cb91a6386ba47bd1527b240bd5725fbae"
+uuid = "48062228-2e41-5def-b9a4-89aafe57970f"
+version = "0.9.10"
 
 [[FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
@@ -1137,9 +1154,9 @@ version = "1.47.0+0"
 
 [[Parsers]]
 deps = ["Dates"]
-git-tree-sha1 = "bfd7d8c7fd87f04543810d9cbd3995972236ba1b"
+git-tree-sha1 = "438d35d2d95ae2c5e8780b330592b6de8494e779"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "1.1.2"
+version = "2.0.3"
 
 [[Pixman_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1397,9 +1414,9 @@ version = "1.0.1"
 
 [[Tables]]
 deps = ["DataAPI", "DataValueInterfaces", "IteratorInterfaceExtensions", "LinearAlgebra", "TableTraits", "Test"]
-git-tree-sha1 = "d0c690d37c73aeb5ca063056283fde5585a41710"
+git-tree-sha1 = "368d04a820fe069f9080ff1b432147a6203c3c89"
 uuid = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
-version = "1.5.0"
+version = "1.5.1"
 
 [[Tar]]
 deps = ["ArgTools", "SHA"]
@@ -1433,6 +1450,12 @@ deps = ["REPL"]
 git-tree-sha1 = "53915e50200959667e78a92a418594b428dffddf"
 uuid = "1cfade01-22cf-5700-b092-accc4b62d6e1"
 version = "0.4.1"
+
+[[WeakRefStrings]]
+deps = ["DataAPI", "Parsers", "Random", "Serialization", "Test"]
+git-tree-sha1 = "4cd606838f91a9c3c7404df41173e132bdb09e82"
+uuid = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
+version = "1.2.2"
 
 [[WoodburyMatrices]]
 deps = ["LinearAlgebra", "SparseArrays"]
@@ -1566,6 +1589,7 @@ version = "3.5.0+0"
 # ╠═5d7dc2d4-1008-11ec-2ea6-ffc13cf6dbf7
 # ╟─df9273de-28e0-42ca-8e7d-8d2fe1b9be2d
 # ╠═99546f56-7c64-4cf5-98ce-0ed48896b82c
+# ╠═11cb62b7-6736-47de-8c91-67b858747004
 # ╠═5aa0776d-3b03-4910-a2b7-e51c7404e1ee
 # ╟─d8d7d67a-d2aa-4fb7-8cea-f69c60de2326
 # ╠═c4a027a1-902f-48bc-8009-71653f766e8d
@@ -1592,10 +1616,9 @@ version = "3.5.0+0"
 # ╠═54e69118-d930-49ba-9bd7-afbf614dda75
 # ╠═18a6b29b-94b4-46e6-8242-45dbea143700
 # ╠═d223139b-f209-4495-ad6a-69e91f524690
-# ╠═11a942a9-edc5-4345-b74f-579b27ca4296
-# ╠═729ac680-e1d1-41cc-8566-1e5cc1d8cb91
 # ╟─2c2c3b51-426d-41ec-acad-7e6c1e6fae48
 # ╠═3198e0c5-588e-4bcd-bb62-ecba0ca129a2
+# ╠═4d14f8a6-17b1-406d-8f4c-1199ee0f9966
 # ╠═f2a1b2d0-7bae-4ab6-a287-e42d02e01383
 # ╠═b16e6a8d-db29-4cc6-911b-3ebb3c8f71c0
 # ╠═ee60825b-808f-49da-9dd8-824aa85d2c76
