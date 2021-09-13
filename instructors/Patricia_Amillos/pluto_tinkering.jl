@@ -10,6 +10,7 @@ begin
 	CairoMakie.activate!(type="svg")
 	
 	using CSV
+	using CategoricalArrays
 	using DataFrames
 	using DataFrameMacros
 	using Effects
@@ -19,12 +20,53 @@ begin
 	using DisplayAs
 end
 
+# ╔═╡ 27246b91-7a80-4e46-94ca-5efa80232ea4
+md"""
+
+# Analysis of Binomial data provided by Patricia Amillos
+
+*by Phillip Alday*
+
+"""
+
 # ╔═╡ 14a2bf43-0b39-40e8-a7d9-8f2fcf368079
 md"""
 ## Experimental Design
 
 My experiment is about whether German native speakers can learn to discriminate the Hindi dental-retroflex voiceless stop contrast after undergoing a word-based training. Instead of exposing them to distributions of the sounds, we embed the sounds in pseudo-words that are assigned a referent. We then have them learn the referents that match these words. We want to see if this meaning-based training paradigm can lead to improvements in their discrimination abilities. I’ve written more information in the RMD file.
 """
+
+# ╔═╡ a0c28106-1ad8-4238-a08e-a7188db9e4ac
+md"""
+### Data  from 27 German native speaking adults 
+
+They were taught to discriminate between the Hindi voiceless retroflex vs dental stop using a word learning-based training (i.e. cross-situational word learning).
+
+They completed the following tasks in this order:
+  1. Pre-Training AXB discrimination task (2 counterbalanced lists: A and B)
+  2. CSWL-based Training Task (watch a video, no responses collected; 2 counterbalanced training list: A and B)
+  3. Post-Training AXB discrimination (exactly the same as the pre-test)
+  4. Word Identification Task (Choose between 2 objects and click on the one named)
+  
+## AXB Performance
++ Goal: To see if there is an increase in their discrimination abilities of this non-native contrast after a training phase
++ Participants completed 36 trials in an AXB task. There were 12 trials where they only discriminated a native contrast (t vs d) in a non-word. This was only used to check attention throughout the task. This leaves 24 target trials where they had to discriminate the Hindi contrast.  
++ The 24 trials were further divided into 2 where they performed discrimination with 12 trained word pairs and 12 untrained word pairs.   
++ The trained word pair (tapsa-ʈapsa) appears in the CSWL training phase where each member of the pair is assigned an object as its referent.  
++ The untrained word pair (gosta-gosʈa) only appears in the AXB task and is not assigned any referent/meaning. It serves as a test of whether the ability to discriminate the contrast is generalized.
+
+"""
+
+# ╔═╡ 4426129a-0032-403e-8a9c-9d07136eb6f2
+begin
+	dat = CSV.read("../../Patricia_Amillos/full_axb.csv", DataFrame)
+end
+
+# ╔═╡ a42409fe-53b6-4fca-98d2-8e1b6d1b1841
+contrasts = Dict(:Task => DummyCoding(),
+				 :trained => DummyCoding(),
+				 :ID => Grouping(),
+				 :item => Grouping())
 
 # ╔═╡ 88254acb-9622-4b7c-a290-16d46ae2bf74
 md"""
@@ -87,6 +129,7 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+CategoricalArrays = "324d7699-5711-5eae-9e2f-1d82baa6b597"
 DataFrameMacros = "75880514-38bc-4a95-a458-c2aea5a3a702"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DisplayAs = "0b91fe84-8a4c-11e9-3e1d-67c38462b6d6"
@@ -98,6 +141,7 @@ StandardizedPredictors = "5064a6a7-f8c2-40e2-8bdc-797ec6f1ae18"
 [compat]
 CSV = "~0.9.0"
 CairoMakie = "~0.6.5"
+CategoricalArrays = "~0.10.0"
 DataFrameMacros = "~0.1.0"
 DataFrames = "~1.2.2"
 DisplayAs = "~0.1.2"
@@ -219,6 +263,12 @@ deps = ["Artifacts", "Bzip2_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll",
 git-tree-sha1 = "f2202b55d816427cd385a9a4f3ffb226bee80f99"
 uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
 version = "1.16.1+0"
+
+[[CategoricalArrays]]
+deps = ["DataAPI", "Future", "JSON", "Missings", "Printf", "RecipesBase", "Statistics", "StructTypes", "Unicode"]
+git-tree-sha1 = "1562002780515d2573a4fb0c3715e4e57481075e"
+uuid = "324d7699-5711-5eae-9e2f-1d82baa6b597"
+version = "0.10.0"
 
 [[ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
@@ -1347,8 +1397,12 @@ version = "3.5.0+0"
 """
 
 # ╔═╡ Cell order:
+# ╟─27246b91-7a80-4e46-94ca-5efa80232ea4
 # ╠═3092de74-1205-11ec-0e2b-f7aab5a09745
 # ╟─14a2bf43-0b39-40e8-a7d9-8f2fcf368079
+# ╟─a0c28106-1ad8-4238-a08e-a7188db9e4ac
+# ╠═4426129a-0032-403e-8a9c-9d07136eb6f2
+# ╠═a42409fe-53b6-4fca-98d2-8e1b6d1b1841
 # ╟─88254acb-9622-4b7c-a290-16d46ae2bf74
 # ╟─fae0a310-7d49-426e-8dbd-b63ae3c9308a
 # ╟─44bd19a5-11d2-4f1f-b2f1-6fac79c70b3b

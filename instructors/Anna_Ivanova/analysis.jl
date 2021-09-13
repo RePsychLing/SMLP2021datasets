@@ -67,9 +67,9 @@ end
 # ╔═╡ fb636d4a-e753-42a4-90f8-f49bb2e4ea32
 contr = Dict(:Subject => Grouping(),
 			 :fROI => DummyCoding(),
-			 :Sentences => Center(),
-			 :Nonwords => Center(),
-             :Run => Center(),
+			 #:Sentences => Center(), # ZScore()
+			 #:Nonwords => Center(),
+             #:Run => Center(),
 			 :R1 => Center(),
 			 :R2 => Center(),
 			 :R3 => Center(),
@@ -95,16 +95,19 @@ mrun
 qqcaterpillar(mrun, :Subject)
 
 # ╔═╡ 3b944d36-925c-4efc-9001-19de6e131d56
-caterpillar(mrun, :fROI)
+qqcaterpillar(mrun, :fROI)
 
 # ╔═╡ 9cb439f2-570a-4ad0-afbf-fc94eddd6992
-shrinkageplot(mrun, :fROI)
+# shrinkageplot(mrun, :fROI)
 
 # ╔═╡ 6f6aaaae-07e3-4cb6-964d-d0fba1b92bb1
-shrinkageplot(mrun, :fROI, 100*mrun.optsum.initial)
+# shrinkageplot(mrun, :fROI, 1000* mrun.optsum.initial)
+
+# ╔═╡ da355724-5b6e-41d1-8dbf-6a390c289150
+qqcaterpillar(mrun, :fROI)
 
 # ╔═╡ 33774179-285a-4894-a394-e57847e39074
-shrinkageplot(mrun, :Subject, 5000*mrun.optsum.initial)
+# shrinkageplot(mrun, :Subject, 5*mrun.optsum.initial)
 
 # ╔═╡ 216ff711-14f9-4700-85a2-739d146ac86a
 md"""
@@ -1438,6 +1441,7 @@ version = "3.5.0+0"
 # ╠═3b944d36-925c-4efc-9001-19de6e131d56
 # ╠═9cb439f2-570a-4ad0-afbf-fc94eddd6992
 # ╠═6f6aaaae-07e3-4cb6-964d-d0fba1b92bb1
+# ╠═da355724-5b6e-41d1-8dbf-6a390c289150
 # ╠═33774179-285a-4894-a394-e57847e39074
 # ╠═216ff711-14f9-4700-85a2-739d146ac86a
 # ╟─00000000-0000-0000-0000-000000000001

@@ -16,6 +16,8 @@ begin
 	using MixedModels
 	using MixedModelsMakie
 	using StandardizedPredictors
+	
+	using DisplayAs
 end
 
 # ╔═╡ 05b9936b-9184-4c5a-8a15-53a7fbd5731b
@@ -81,8 +83,14 @@ contr = Dict(:group => EffectsCoding(base="control"),
 # ╔═╡ 1a6becd8-202b-4cc6-87d6-2bdd3190efde
 gm1 = fit(MixedModel, @formula(accuracy ~ 1 + group * contrast * age + (1 + contrast | subj) + (1 + contrast | item)), dat, Bernoulli(); fast=true, contrasts=contr)
 
+# ╔═╡ 511bfe5e-0424-47b6-8ca9-b364e9519e90
+DisplayAs.Text(gm1)
+
 # ╔═╡ d9181979-d0d1-4196-b51d-c34dfa69361d
-shrinkageplot(gm1.LMM)
+shrinkageplot(gm1.LMM, :subj)
+
+# ╔═╡ ecbb6e07-e1f0-43df-b90c-7d29159677ba
+shrinkageplot(gm1.LMM, :item)
 
 # ╔═╡ 2c2ba397-4aa5-48c1-b4bd-5d22eba64fa0
 md"""
@@ -98,6 +106,7 @@ Arrow = "69666777-d1a9-59fb-9406-91d4454c9d45"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 DataFrameMacros = "75880514-38bc-4a95-a458-c2aea5a3a702"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DisplayAs = "0b91fe84-8a4c-11e9-3e1d-67c38462b6d6"
 Effects = "8f03c58b-bd97-4933-a826-f71b64d2cca2"
 MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
 MixedModelsMakie = "b12ae82c-6730-437f-aff9-d2c38332a376"
@@ -108,6 +117,7 @@ Arrow = "~1.6.2"
 CairoMakie = "~0.6.5"
 DataFrameMacros = "~0.1.0"
 DataFrames = "~1.2.2"
+DisplayAs = "~0.1.2"
 Effects = "~0.1.2"
 MixedModels = "~4.1.1"
 MixedModelsMakie = "~0.3.8"
@@ -337,6 +347,11 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 [[DelimitedFiles]]
 deps = ["Mmap"]
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+
+[[DisplayAs]]
+git-tree-sha1 = "44e8d47bc0b56ec09115056a692e5fa0976bfbff"
+uuid = "0b91fe84-8a4c-11e9-3e1d-67c38462b6d6"
+version = "0.1.2"
 
 [[Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
@@ -1339,7 +1354,9 @@ version = "3.5.0+0"
 # ╟─b8a6b0a7-e876-47c9-b585-a1ef64800bb6
 # ╠═87546ec1-bccc-44d4-98fe-954d6aaa00d6
 # ╠═1a6becd8-202b-4cc6-87d6-2bdd3190efde
+# ╠═511bfe5e-0424-47b6-8ca9-b364e9519e90
 # ╠═d9181979-d0d1-4196-b51d-c34dfa69361d
+# ╠═ecbb6e07-e1f0-43df-b90c-7d29159677ba
 # ╟─2c2ba397-4aa5-48c1-b4bd-5d22eba64fa0
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
