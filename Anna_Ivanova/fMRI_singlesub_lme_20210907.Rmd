@@ -1,0 +1,131 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+# Analyzing fMRI timeseries using LMEs
+
+This is a functional MRI dataset of a basic block-design experiment. Participants in the scanner (N=599) see a sequence of the following experimental blocks: 
+- fixation (black cross on white background; modeled implicitly as baseline), 
+- sentences
+- sequences of nonwords (e.g., "FLORP"). 
+The experiment is split up into 2 runs, each lasting 358sec. Brain measurements are taken every 2 seconds (so we have 179 measurements/run). 
+
+We extracted fMRI signal from 6 regions of interest (ROIs) comprising the language network in the left hemisphere, as well as 6 homologous regions in the right hemisphere (which are thought to also be sensitive to language but much less). The exact location of each ROI differs across participants (it is defined based on functional MRI data, so we call them functional ROIs, or fROIs). We consider fROIs with the same name to be functionally equivalent across participants. The signal in each fROI is an average of the signal in all voxels (3D pixels) comprising the fROI - this is a simplification that can be removed in the future if the compute power is sufficiently high.
+
+We have the following predictors:
+- Sentences: whether the participant is viewing sentences at this timepoint. This is a sequence of 1s and 0s convolved with the hemodynamic response function to account for the fact that the response recorded with fMRI has a particular temporal profile.
+- Nonwords: whether the participant is viewing nonwords
+- Run: experimental run (1 or 2)
+- fROI: functional region of interest; 1 through 12. We know from prior work that response properties of fROIs in the same hemisphere (1-6 and 7-12) are largely shared and thus they can be modeled jointly.
+- Subject: same as participant
+- Time: timepoint within a run (1-179)
+
+Some additional predictors that we can ignore for now:
+- Sentences_deriv and nonwords_deriv: temporal derivatives of the corresponding predictors that can be included to account for variation in fMRI response onset.
+
+
+```{r}
+rm(list=ls()) 
+
+library(reshape2)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(lme4)
+library(lmerTest)
+```
+
+## Read the data
+```{r}
+data = read.csv("fROI_data_large.csv")
+
+# Ensure the columns are the correct type
+data$Time = as.numeric(data$Time)
+data$Run = as.factor(data$Run)
+data$fROI = as.factor(data$fROI)
+data$Subject = as.factor(data$Subject)
+
+# Add information about hemisphere (left - LH, right - RH)
+data = data %>%
+  mutate(System = ifelse(fROI %in% c(1,2,3,4,5,6), 
+                         'LH_lang', 'RH_lang'))
+```
+
+## Plot 
+
+Only plotting a subset
+
+```{r}
+data.plot = data %>%
+  filter(Subject %in% c('uid436', 'uid672', 'uid529', 'uid662'))
+```
+
+### Response Timeseries
+
+```{r}
+ggplot(data=data.plot, mapping=aes(x=Time, y=value, color=fROI))+
+  facet_grid(cols=vars(Subject), rows=vars(Run), labeller = label_both)+
+  geom_line()
+```
+
+### Key predictors
+
+The predictors are already convolved with the hemodynamic response function, so their values overlap even though the presented blocks of sentences and nonwords do not.
+
+```{r}
+ggplot(data=data.plot)+
+  geom_line(mapping=aes(x=Time, y=Sentences,color='r'))+
+    geom_line(mapping=aes(x=Time, y=Nonwords, color='b'))+
+  facet_grid(rows=vars(Run), labeller = label_both)+
+  scale_color_hue(labels = c('Sentences', 'Nonwords'))
+```
+
+## Statistical Model
+
+### Key predictors vs. fixation
+
+We want to model the effect of reading sentences and nonwords while accounting for response variability across participants and fROIs:
+
+```{r}
+m.first = lmer(value~Sentences*System+Nonwords*System+(1+Sentences+Nonwords|fROI)+(1+Sentences+Nonwords|Subject),
+         data=data, REML=FALSE)
+summary(m.first)
+```
+
+### Sentences>nonwords
+
+What we actually want to do, though, is to compare the effect of reading sentences vs. that of reading nonwords. 
+
+QUESTION: how do we best compare whether the response to sentences is significantly greater than response to nonwords (give that our predictors aren't categorical)?
+
+### Effect of run
+
+The response properties might differ slightly from run to run. Let's assume that these response properties might be shared across participants (e.g., responses during run 2 are lower for all)
+
+```{r}
+m.run = lmer(value~Sentences*System+Nonwords*Systems+Run+(1+Sentences+Nonwords+Run|fROI)+(1+Sentences+Nonwords+Run|Subject), data=data, REML=FALSE)
+summary(m.run)
+```
+
+### Linear drift
+
+Another predictor that we should include is time - timeseries are subject to linear drift. Drift patterns might be shared across fROIs within a participant, for the same fROI across participants, or be specific to each fROI/run/participant combination.
+
+```{r}
+# center and scale
+data$cTime = scale(data$Time)
+
+m.drift = lmer(value~Sentences+Nonwords+Run+(1+Sentences+Nonwords+Run|fROI)+(1+Sentences+Nonwords+Run|Subject)+(cTime|fROI:Subject:Run),
+             data=data, REML=FALSE,
+             control = lmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e5)))
+summary(m.drift)
+```
+
+### Autocorrelation
+
+We know that our data are temporally correlated.
+
+TODO: add autocorrelation
